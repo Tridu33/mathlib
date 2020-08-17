@@ -275,7 +275,7 @@ namespace outer_measure
 protected def pi (m : Π i, outer_measure (α i)) : outer_measure (Π i, α i) :=
 outer_measure.of_function (pi_premeasure m) pi_premeasure_empty
 
-lemma pi_pi_le {s : Π i, set (α i)} :
+lemma pi_pi_le (s : Π i, set (α i)) :
   outer_measure.pi m (pi univ s) ≤ ∏ i, m i (s i) :=
 le_trans (of_function_le _) pi_premeasure_pi_le
 
@@ -324,7 +324,8 @@ to_measure (outer_measure.pi (λ i, (μ i).to_outer_measure)) (pi_caratheodory �
 lemma pi_pi (s : Π i, set (α i)) (hs : (pi univ s).nonempty) :
   measure.pi μ (pi univ s) = ∏ i, μ i (s i) :=
 begin
-  sorry
+
+  -- refine le_antisymm (outer_measure.pi_pi_le s) _,
 end
 
 
