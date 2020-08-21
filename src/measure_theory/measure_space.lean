@@ -28,6 +28,8 @@ We introduce the following typeclasses for measures:
 
 * `probability_measure μ`: `μ univ = 1`;
 * `finite_measure μ`: `μ univ < ⊤`;
+* `sigma_finite μ s`: set `s` is covered by a countable collection of measurable sets
+  where `μ` is finite;
 * `locally_finite_measure μ` : `∀ x, ∃ s ∈ 𝓝 x, μ s < ⊤`.
 
 Given a measure, the null sets are the sets where `μ s = 0`, where `μ` denotes the corresponding
@@ -53,6 +55,14 @@ Two ways that are sometimes more convenient:
 * `outer_measure.to_measure` is a way of obtaining a measure from an outer measure by showing that
   all measurable sets in the measurable space are Carathéodory measurable.
 
+To prove that two measures are equal, there are multiple options:
+* `ext`: two measures are equal if they are equal on all measurable sets.
+* `ext_finite`: two finite measures are equal if they are equal on a π-system generating the
+  measurable sets.
+* `ext_sigma_finite`: two measures are equal if they are equal on a π-system generating
+  the measurable sets, if the π-system contains a spanning increasing sequence of sets where the
+  measures take finite value (in particular the measures are σ-finite).
+
 A `measure_space` is a class that is a measurable space with a canonical measure.
 The measure is denoted `volume`.
 
@@ -69,7 +79,7 @@ measure, almost everywhere, measure space, completion, null set, null measurable
 
 noncomputable theory
 
-open classical set filter finset function
+open classical set filter function
 open_locale classical topological_space big_operators filter
 
 universes u v w x
@@ -80,7 +90,7 @@ namespace measure_theory
 measurable sets, with the additional assumption that the outer measure is the canonical
 extension of the restricted measure. -/
 structure measure (α : Type*) [measurable_space α] extends outer_measure α :=
-(m_Union {{f : ℕ → set α}} :
+(m_Union ⦃f : ℕ → set α⦄ :
   (∀i, is_measurable (f i)) → pairwise (disjoint on f) →
   measure_of (⋃i, f i) = (∑'i, measure_of (f i)))
 (trimmed : to_outer_measure.trim = to_outer_measure)
@@ -282,6 +292,10 @@ begin
   refine (ennreal.add_sub_self' h_fin).symm.trans _,
   rw [← measure_union disjoint_diff h₂ (h₁.diff h₂), union_diff_cancel h]
 end
+
+lemma measure_compl {μ : measure α} {s : set α} (h₁ : is_measurable s) (h_fin : μ s < ⊤) :
+  μ (sᶜ) = μ univ - μ s :=
+by { rw compl_eq_univ_diff, exact measure_diff (subset_univ s) is_measurable.univ h₁ h_fin }
 
 lemma sum_measure_le_measure_univ {s : finset ι} {t : ι → set α} (h : ∀ i ∈ s, is_measurable (t i))
   (H : pairwise_on ↑s (disjoint on t)) :
@@ -502,7 +516,7 @@ section
 variables {m : set (measure α)} {μ : measure α}
 
 lemma Inf_caratheodory (s : set α) (hs : is_measurable s) :
-  (Inf (measure.to_outer_measure '' m)).caratheodory.is_measurable s :=
+  (Inf (measure.to_outer_measure '' m)).caratheodory.is_measurable' s :=
 begin
   rw [outer_measure.Inf_eq_of_function_Inf_gen],
   refine outer_measure.of_function_caratheodory (assume t, _),
@@ -1041,6 +1055,9 @@ class finite_measure (μ : measure α) : Prop := (meas_univ_lt_top : μ univ < �
 
 export finite_measure (meas_univ_lt_top) probability_measure (meas_univ)
 
+lemma measure_lt_top {μ : measure α} [finite_measure μ] {s : set α} : μ s < ⊤ :=
+(μ.mono $ subset_univ _).trans_lt meas_univ_lt_top
+
 @[priority 100]
 instance probability_measure.to_finite_measure (μ : measure α) [probability_measure μ] :
   finite_measure μ :=
@@ -1053,6 +1070,35 @@ def measure.finite_at_filter (μ : measure α) (f : filter α) : Prop := ∃ s �
 lemma finite_at_filter_of_finite (μ : measure α) [finite_measure μ] (f : filter α) :
   μ.finite_at_filter f :=
 ⟨univ, univ_mem_sets, meas_univ_lt_top⟩
+
+/-- A set `s` is called σ-finite w.r.t. measure `μ` if there is a countable collection of sets
+  `{ A i | i ∈ ℕ }` such that `μ (A i) < ⊤` and `⋃ i, A i = s`.
+  A measure `μ` is called σ-finite if `univ` is σ-finite w.r.t. `μ`.
+  Note that this class is not a Proposition. -/
+class sigma_finite (μ : measure α) (s : set α) :=
+(spanning_sets : ℕ → set α)
+(measurable_spanning_sets : ∀ i, is_measurable (spanning_sets i))
+(measure_spanning_sets_lt_top : ∀ i, μ (spanning_sets i) < ⊤)
+(Union_spanning_sets : (⋃ i, spanning_sets i) = s)
+
+export sigma_finite (spanning_sets)
+
+lemma measure_spanning_sets_lt_top (μ : measure α) (s : set α) [sigma_finite μ s] (i : ℕ) :
+  μ (spanning_sets μ s i) < ⊤ :=
+sigma_finite.measure_spanning_sets_lt_top i
+
+lemma Union_spanning_sets (μ : measure α) (s : set α) [sigma_finite μ s] :
+  (⋃ i, spanning_sets μ s i) = s :=
+sigma_finite.Union_spanning_sets
+
+/-- Every set is σ-finite w.r.t. a finite measure -/
+def finite_measure.to_sigma_finite (μ : measure α) [finite_measure μ] (s : set α)
+  (hs : is_measurable s) : sigma_finite μ s :=
+⟨λ _, s, λ _, hs, λ _, measure_lt_top, Union_const _⟩
+
+instance restrict.finite_measure (μ : measure α) {s : set α} [hs : fact (μ s < ⊤)] :
+  finite_measure (μ.restrict s) :=
+⟨by simp [hs.elim]⟩
 
 /-- A measure is called locally finite if it is finite in some neighborhood of each point. -/
 class locally_finite_measure [topological_space α] (μ : measure α) : Prop :=
@@ -1068,6 +1114,53 @@ lemma measure.finite_at_nhds [topological_space α] (μ : measure α)
   [locally_finite_measure μ] (x : α) :
   μ.finite_at_filter (𝓝 x) :=
 locally_finite_measure.finite_at_nhds x
+
+/-! ### Other extensionality results -/
+
+open measurable_space
+
+/-- Two finite measures are equal if they are equal on the π-system generating the σ-algebra
+  (and `univ`). -/
+lemma ext_finite (C : set (set α)) (hA : _inst_1 = generate_from C)
+  (hC : ∀⦃s t : set α⦄, s ∈ C → t ∈ C → (s ∩ t).nonempty → s ∩ t ∈ C) (μ ν : measure α)
+  [finite_measure μ] [finite_measure ν] (hμν : ∀ s ∈ C, μ s = ν s) (h_univ : μ univ = ν univ) :
+  μ = ν :=
+begin
+  ext1 s hs,
+  refine induction_on_inter hA hC (by simp) hμν _ _ hs,
+  { rintros t h1t h2t, change is_measurable t at h1t, simp [measure_compl, measure_lt_top, *] },
+  { rintros f h1f h2f h3f, simp [measure_Union, is_measurable.Union, *] }
+end
+
+/-- Two σ-finite measures are equal if they have equal restrictions on a increasing collection of
+  sets spanning `univ`. -/
+lemma ext_restrict {μ ν : measure α} (B : ℕ → set α) (h1B : (⋃ i, B i) = univ)
+  (h2B : ∀ i, is_measurable (B i)) (h3B : monotone B)
+  (hμν : ∀ i, μ.restrict (B i) = ν.restrict (B i)) : μ = ν :=
+begin
+  ext1 s hs, rw [← inter_univ s, ← h1B, inter_Union],
+  have h2s : ∀ i, is_measurable (s ∩ B i) := λ i, hs.inter (h2B i),
+  have h3s : monotone (λ i, s ∩ B i) := λ i j hij, inter_subset_inter_right _ (h3B hij),
+  simp_rw [measure_Union_eq_supr_nat h2s h3s], congr' 1, ext1 i,
+  simp [← measure.restrict_apply hs, hμν]
+end
+
+/-- Two measures are equal if they are equal on the π-system generating the σ-algebra,
+  and they are both finite on a increasing spanning sequence of sets in the π-system. -/
+lemma ext_sigma_finite (C : set (set α)) (hA : _inst_1 = generate_from C)
+  (hC : ∀⦃s t : set α⦄, s ∈ C → t ∈ C → (s ∩ t).nonempty → s ∩ t ∈ C) (μ ν : measure α)
+  {B : ℕ → set α} (h1B : (⋃ i, B i) = univ) (h2B : ∀ i, B i ∈ C) (h3B : monotone B)
+  (hμB : ∀ i, μ (B i) < ⊤) (hνB : ∀ i, ν (B i) < ⊤) (hμν : ∀ s ∈ C, μ s = ν s) : μ = ν :=
+begin
+  have : ∀ s ∈ C, is_measurable s := λ s hs, by {rw [hA], exact generate_measurable.basic s hs },
+  haveI : ∀ i, fact (μ (B i) < ⊤) := hμB,
+  haveI : ∀ i, fact (ν (B i) < ⊤) := hνB,
+  apply ext_restrict B h1B (λ i, this _ (h2B i)) h3B, intro i,
+  refine ext_finite C hA hC (μ.restrict (B i)) (ν.restrict (B i)) _ _,
+  { intros s hs, simp_rw [measure.restrict_apply (this s hs)],
+    cases set.eq_empty_or_nonempty (s ∩ B i) with h h, simp [h], exact hμν _ (hC hs (h2B i) h) },
+  { simp_rw [measure.restrict_apply is_measurable.univ, univ_inter], exact hμν _ (h2B i) }
+end
 
 namespace measure
 
@@ -1236,7 +1329,7 @@ end
 /-- The measurable space of all null measurable sets. -/
 def null_measurable {α : Type u} [measurable_space α]
   (μ : measure α) : measurable_space α :=
-{ is_measurable := is_null_measurable μ,
+{ is_measurable' := is_null_measurable μ,
   is_measurable_empty := is_measurable.empty.is_null_measurable _,
   is_measurable_compl := λ s hs, hs.compl,
   is_measurable_Union := λ f, is_null_measurable.Union_nat }
